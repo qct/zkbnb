@@ -70,6 +70,8 @@ func NewWitness(c config.Config) (*Witness, error) {
 		proofModel:          proof.NewProofModel(db),
 	}
 	err = w.initState()
+	newStateRoot := tree.ComputeStateRootHash(w.accountTree.Root(), w.nftTree.Root())
+	fmt.Printf("Starting witness, StateRoot: %x, accountRoot: %x\n", newStateRoot, w.accountTree.Root())
 	return w, err
 }
 
@@ -142,6 +144,8 @@ func (w *Witness) GenerateBlockWitness() (err error) {
 	// scan each block
 	for _, block := range blocks {
 		logx.Infof("construct witness for block %d", block.BlockHeight)
+		beforeStateRoot := tree.ComputeStateRootHash(w.accountTree.Root(), w.nftTree.Root())
+		fmt.Printf("Before witness, StateRoot: %x, accountRoot: %x\n", beforeStateRoot, w.accountTree.Root())
 		// Step1: construct witness
 		blockWitness, err := w.constructBlockWitness(block, latestVerifiedBlockNr)
 		if err != nil {
@@ -162,6 +166,8 @@ func (w *Witness) GenerateBlockWitness() (err error) {
 			}
 			return fmt.Errorf("create unproved crypto block error, block:%d, err: %v", block.BlockHeight, err)
 		}
+		afterStateRoot := tree.ComputeStateRootHash(w.accountTree.Root(), w.nftTree.Root())
+		fmt.Printf("After witness, StateRoot: %x, accountRoot: %x\n", afterStateRoot, w.accountTree.Root())
 	}
 	return nil
 }
@@ -252,6 +258,8 @@ func (w *Witness) constructBlockWitness(block *block.Block, latestVerifiedBlockN
 		// if it is the last tx of the block
 		if idx == len(block.Txs)-1 {
 			newStateRoot = txWitness.StateRootAfter
+			fmt.Printf("Before accountRoot: %x\n", txWitness.AccountRootBefore)
+			fmt.Printf("After accountRoot: %x\n", w.accountTree.Root())
 		}
 	}
 
@@ -264,7 +272,7 @@ func (w *Witness) constructBlockWitness(block *block.Block, latestVerifiedBlockN
 	if err != nil {
 		return nil, err
 	}
-
+	fmt.Printf("After accountRoot: %x\n", w.accountTree.Root())
 	newStateRoot = tree.ComputeStateRootHash(w.accountTree.Root(), w.nftTree.Root())
 	if common.Bytes2Hex(newStateRoot) != block.StateRoot {
 		return nil, errors.New("state root doesn't match")

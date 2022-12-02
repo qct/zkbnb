@@ -502,6 +502,7 @@ func (s *StateDB) IntermediateRoot(cleanDirty bool) error {
 	resultChan := make(chan *treeUpdateResp, 1)
 	defer close(resultChan)
 
+	pendingAccountItem := make([]bsmt.Item, 0, len(s.dirtyAccountsAndAssetsMap))
 	for accountIndex, assetsMap := range s.dirtyAccountsAndAssetsMap {
 		assets := make([]int64, 0, len(assetsMap))
 		for assetIndex, isDirty := range assetsMap {
@@ -510,21 +511,26 @@ func (s *StateDB) IntermediateRoot(cleanDirty bool) error {
 			}
 			assets = append(assets, assetIndex)
 		}
-		taskNum++
-		err := func(accountIndex int64, assets []int64) error {
-			return gopool.Submit(func() {
-				index, leaf, err := s.updateAccountTree(accountIndex, assets)
-				resultChan <- &treeUpdateResp{
-					role:  accountTreeRole,
-					index: index,
-					leaf:  leaf,
-					err:   err,
-				}
-			})
-		}(accountIndex, assets)
+		index, leaf, err := s.updateAccountTree(accountIndex, assets)
 		if err != nil {
 			return err
 		}
+		pendingAccountItem = append(pendingAccountItem, bsmt.Item{Key: uint64(index), Val: leaf})
+		//taskNum++
+		//err := func(accountIndex int64, assets []int64) error {
+		//	return gopool.Submit(func() {
+		//		index, leaf, err := s.updateAccountTree(accountIndex, assets)
+		//		resultChan <- &treeUpdateResp{
+		//			role:  accountTreeRole,
+		//			index: index,
+		//			leaf:  leaf,
+		//			err:   err,
+		//		}
+		//	})
+		//}(accountIndex, assets)
+		//if err != nil {
+		//	return err
+		//}
 	}
 
 	for nftIndex, isDirty := range s.dirtyNftMap {
@@ -553,7 +559,7 @@ func (s *StateDB) IntermediateRoot(cleanDirty bool) error {
 		s.dirtyNftMap = make(map[int64]bool, 0)
 	}
 
-	pendingAccountItem := make([]bsmt.Item, 0, len(s.dirtyAccountsAndAssetsMap))
+	//pendingAccountItem := make([]bsmt.Item, 0, len(s.dirtyAccountsAndAssetsMap))
 	pendingNftItem := make([]bsmt.Item, 0, len(s.dirtyNftMap))
 	for i := 0; i < taskNum; i++ {
 		result := <-resultChan
@@ -568,30 +574,44 @@ func (s *StateDB) IntermediateRoot(cleanDirty bool) error {
 			pendingNftItem = append(pendingNftItem, bsmt.Item{Key: uint64(result.index), Val: result.leaf})
 		}
 	}
-	err := gopool.Submit(func() {
-		resultChan <- &treeUpdateResp{
-			role: accountTreeRole,
-			err:  s.AccountTree.MultiSet(pendingAccountItem),
-		}
-	})
+	fmt.Printf("Before AccountTreeRoot: %x\n", s.AccountTree.Root())
+	//err := gopool.Submit(func() {
+	//	//var err error
+	//	//for _, item := range pendingAccountItem {
+	//	//	err = s.AccountTree.Set(item.Key, item.Val)
+	//	//}
+	//	//resultChan <- &treeUpdateResp{
+	//	//	role: accountTreeRole,
+	//	//	err:  err,
+	//	//}
+	//	resultChan <- &treeUpdateResp{
+	//		role: accountTreeRole,
+	//		err:  s.AccountTree.MultiSet(pendingAccountItem),
+	//	}
+	//})
+	err := s.AccountTree.MultiSet(pendingAccountItem)
 	if err != nil {
 		return err
 	}
-	err = gopool.Submit(func() {
-		resultChan <- &treeUpdateResp{
-			role: nftTreeRole,
-			err:  s.NftTree.MultiSet(pendingNftItem),
-		}
-	})
+	//err = gopool.Submit(func() {
+	//	resultChan <- &treeUpdateResp{
+	//		role: nftTreeRole,
+	//		err:  s.NftTree.MultiSet(pendingNftItem),
+	//	}
+	//})
+	err = s.NftTree.MultiSet(pendingNftItem)
 	if err != nil {
 		return err
 	}
-	for i := 0; i < 2; i++ {
-		result := <-resultChan
-		if result.err != nil {
-			return fmt.Errorf("update %s tree failed, %v", result.role, result.err)
-		}
-	}
+	//for i := 0; i < 1; i++ {
+	//	result := <-resultChan
+	//	if result.err != nil {
+	//		return fmt.Errorf("update %s tree failed, %v", result.role, result.err)
+	//	}
+	//}
+	//accItem, _ := json.Marshal(pendingAccountItem)
+	//fmt.Printf("pendingAccountItem: %s\n", string(accItem))
+	fmt.Printf("After AccountTreeRoot: %x\n", s.AccountTree.Root())
 
 	hFunc := poseidon.NewPoseidon()
 	hFunc.Write(s.AccountTree.Root())
@@ -631,7 +651,24 @@ func (s *StateDB) updateAccountTree(accountIndex int64, assets []int64) (int64, 
 		pendingUpdateAssetItem = append(pendingUpdateAssetItem, bsmt.Item{Key: uint64(assetId), Val: assetLeaf})
 	}
 
+	if len(pendingUpdateAssetItem) == 0 {
+		fmt.Printf("account:%d has no assets to set!\n", accountIndex)
+	}
+	for i := 0; i < len(pendingUpdateAssetItem); i++ {
+		fmt.Printf("account: %d assetsToSet:%d: %x\n", accountIndex, pendingUpdateAssetItem[i].Key, pendingUpdateAssetItem[i].Val)
+	}
+	//assetItem, _ := json.Marshal(pendingUpdateAssetItem)
+	//fmt.Printf("assetsToSet:%d: %s\n", accountIndex, string(assetItem))
+	before := s.AccountAssetTrees.Get(accountIndex).Root()
+	//for _, item := range pendingUpdateAssetItem {
+	//	fmt.Println("before:")
+	//	s.AccountAssetTrees.Get(accountIndex).PrintLeaves()
+	//	err = s.AccountAssetTrees.Get(accountIndex).Set(item.Key, item.Val)
+	//	fmt.Println("after:")
+	//	s.AccountAssetTrees.Get(accountIndex).PrintLeaves()
+	//}
 	err = s.AccountAssetTrees.Get(accountIndex).MultiSet(pendingUpdateAssetItem)
+	fmt.Printf("account:%d, assetsRoot: %x -> %x\n", accountIndex, before, s.AccountAssetTrees.Get(accountIndex).Root())
 	if err != nil {
 		return accountIndex, nil, fmt.Errorf("update asset tree failed: %v", err)
 	}

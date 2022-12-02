@@ -18,6 +18,7 @@
 package prove
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/big"
 
@@ -143,6 +144,7 @@ func (w *WitnessHelper) constructWitnessInfo(
 	}
 	stateRootBefore := tree.ComputeStateRootHash(accountRootBefore, nftRootBefore)
 	stateRootAfter := tree.ComputeStateRootHash(w.accountTree.Root(), w.nftTree.Root())
+	fmt.Printf("stateRootBefore: %x, stateRootAfter: %x\naccountRootBefore: %x, accountRootAfter: %x\n", stateRootBefore, stateRootAfter, accountRootBefore, w.accountTree.Root())
 	cryptoTx = &TxWitness{
 		AccountRootBefore:               accountRootBefore,
 		AccountsInfoBefore:              accountsInfoBefore,
@@ -183,9 +185,17 @@ func (w *WitnessHelper) constructAccountWitness(
 			assetCount = 0
 		)
 		// get account before
+		//w.accountTree.PrintLeaves()
 		accountMerkleProofs, err := w.accountTree.GetProof(uint64(accountKey))
+		//fmt.Printf("after getProof root: %x\n", w.accountTree.Root())
+		//w.accountTree.PrintLeaves()
 		if err != nil {
 			return accountRootBefore, accountsInfoBefore, merkleProofsAccountAssetsBefore, merkleProofsAccountBefore, err
+		}
+		//fmt.Printf("Before account:%d, assetRoot: %s\n", accountKey, proverAccounts[accountCount].AccountInfo.AssetRoot)
+		fmt.Printf("Before account:%d, assetRoot: %x\n", accountKey, w.assetTrees.Get(accountKey).Root())
+		if proverAccounts != nil {
+			fmt.Printf("Before account:%d, assets: %v\n", accountKey, proverAccounts[accountCount].AccountInfo.AssetInfo)
 		}
 		// it means this is a registerZNS tx
 		if proverAccounts == nil {
@@ -243,7 +253,9 @@ func (w *WitnessHelper) constructAccountWitness(
 				AssetRoot:       w.assetTrees.Get(accountKey).Root(),
 			}
 			for i, accountAsset := range proverAccountInfo.AccountAssets {
+				//w.assetTrees.Get(accountKey).PrintLeaves()
 				assetMerkleProof, err := w.assetTrees.Get(accountKey).GetProof(uint64(accountAsset.AssetId))
+				//w.assetTrees.Get(accountKey).PrintLeaves()
 				if err != nil {
 					return accountRootBefore, accountsInfoBefore, merkleProofsAccountAssetsBefore, merkleProofsAccountBefore, err
 				}
@@ -276,7 +288,26 @@ func (w *WitnessHelper) constructAccountWitness(
 				if err != nil {
 					return accountRootBefore, accountsInfoBefore, merkleProofsAccountAssetsBefore, merkleProofsAccountBefore, err
 				}
+				assetTree := w.assetTrees.Get(accountKey)
+				//vvv := assetTree.LatestVersion()
+				//a0, _ := assetTree.Get(0, &vvv)
+				//a1, _ := assetTree.Get(1, &vvv)
+				//a2, _ := assetTree.Get(2, &vvv)
+				//fmt.Printf("--account: %d, asset: %d: %x\n", accountKey, 0, a0)
+				//fmt.Printf("--account: %d, asset: %d: %x\n", accountKey, 1, a1)
+				//fmt.Printf("--account: %d, asset: %d: %x\n", accountKey, 2, a2)
+				fmt.Println("before set asset")
+				assetTree.PrintLeaves()
+				before := w.assetTrees.Get(accountKey).Root()
 				err = w.assetTrees.Get(accountKey).Set(uint64(accountAsset.AssetId), nAssetHash)
+				fmt.Println("after set asset")
+				assetTree.PrintLeaves()
+				//val, _ := json.Marshal(bsmt.Item{Key: uint64(accountAsset.AssetId), Val: nAssetHash})
+				fmt.Printf("account: %d assetsToSet:%d: %x\n", accountKey, accountAsset.AssetId, nAssetHash)
+				fmt.Printf("setting asset: %s\n", nBalance)
+				//fmt.Printf("After account:%d, assetRoot: %x\n", accountKey, w.assetTrees.Get(accountKey).Root())
+				fmt.Printf("account:%d, assetsRoot: %x -> %x\n", accountKey, before, w.assetTrees.Get(accountKey).Root())
+
 				if err != nil {
 					return accountRootBefore, accountsInfoBefore, merkleProofsAccountAssetsBefore, merkleProofsAccountBefore, err
 				}
@@ -333,7 +364,11 @@ func (w *WitnessHelper) constructAccountWitness(
 		if err != nil {
 			return accountRootBefore, accountsInfoBefore, merkleProofsAccountAssetsBefore, merkleProofsAccountBefore, err
 		}
+		//vv := w.accountTree.LatestVersion()
+		//before, err := w.accountTree.Get(uint64(accountKey), &vv)
 		err = w.accountTree.Set(uint64(accountKey), nAccountHash)
+		//val, _ := json.Marshal(bsmt.Item{Key: uint64(accountKey), Val: nAccountHash})
+		//fmt.Printf("account:%d, assetsRoot: %x -> %x\n", accountKey, before, nAccountHash)
 		if err != nil {
 			return accountRootBefore, accountsInfoBefore, merkleProofsAccountAssetsBefore, merkleProofsAccountBefore, err
 		}
@@ -741,7 +776,16 @@ func (w *WitnessHelper) ConstructGasWitness(block *block.Block) (cryptoGas *GasW
 			if err != nil {
 				return nil, err
 			}
+			before := w.assetTrees.Get(gasAccountIndex).Root()
 			err = w.assetTrees.Get(gasAccountIndex).Set(uint64(assetId), nAssetHash)
+			fmt.Printf("account:%d setGasAsset:%d: %x\n", gasAccountIndex, assetId, nAssetHash)
+			assetToSet, _ := json.Marshal(cryptoTypes.AccountAsset{
+				AssetId:                  assetId,
+				Balance:                  balanceAfter,
+				OfferCanceledOrFinalized: offerCanceledOrFinalized,
+			})
+			fmt.Printf("gas setting asset: %s\n", string(assetToSet))
+			fmt.Printf("GasAccount:%d assetsRoot: %x -> %x\n", gasAccountIndex, before, w.assetTrees.Get(gasAccountIndex).Root())
 			if err != nil {
 				return nil, err
 			}
@@ -757,10 +801,14 @@ func (w *WitnessHelper) ConstructGasWitness(block *block.Block) (cryptoGas *GasW
 		if err != nil {
 			return nil, err
 		}
+		before := w.accountTree.Root()
 		err = w.accountTree.Set(uint64(gasAccountIndex), nAccountHash)
 		if err != nil {
 			return nil, err
 		}
+		//val, _ := json.Marshal(bsmt.Item{Key: uint64(gasAccountIndex), Val: nAccountHash})
+		fmt.Printf("set Gas:%d: %x\n", gasAccountIndex, nAccountHash)
+		fmt.Printf("after set gas %d, accountsRoot: %x -> %x\n", gasAccountIndex, before, w.accountTree.Root())
 		gas = &circuit.Gas{
 			GasAssetCount:                   len(types.GasAssets),
 			AccountInfoBefore:               accountInfoBefore,

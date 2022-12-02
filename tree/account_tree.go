@@ -115,6 +115,8 @@ func InitAccountTree(
 
 	for i := int64(0); i < accountNums; i++ {
 		asset := accountAssetTrees.Get(i)
+		//fmt.Printf("assetRoot: %x\n", asset.Root())
+		//asset.PrintLeaves()
 		if asset.LatestVersion() > bsmt.Version(blockHeight) && !asset.IsEmpty() {
 			logx.Infof("asset tree %d version [%d] is higher than block, rollback to %d", i, asset.LatestVersion(), blockHeight)
 			err := asset.Rollback(bsmt.Version(blockHeight))

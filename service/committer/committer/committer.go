@@ -3,6 +3,7 @@ package committer
 import (
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -16,7 +17,7 @@ import (
 )
 
 const (
-	MaxCommitterInterval = 60 * 1
+	MaxCommitterInterval = 10 * 1
 )
 
 var (
@@ -189,6 +190,8 @@ func NewCommitter(config *Config) (*Committer, error) {
 
 		bc: bc,
 	}
+	bc.Statedb.AccountTree.Root()
+	fmt.Printf("Starting committer, StateRoot: %x, accountRoot: %x\n", common.FromHex(bc.Statedb.StateRoot), bc.Statedb.AccountTree.Root())
 	return committer, nil
 }
 
@@ -300,6 +303,7 @@ func (c *Committer) Run() {
 			panic("update tx pool failed: " + err.Error())
 		}
 
+		fmt.Printf("Before commit, StateRoot: %x, accountRoot: %x\n", common.FromHex(c.bc.Statedb.StateRoot), c.bc.Statedb.AccountTree.Root())
 		if c.shouldCommit(curBlock) {
 			start := time.Now()
 			logx.Infof("commit new block, height=%d", curBlock.BlockHeight)
@@ -311,6 +315,7 @@ func (c *Committer) Run() {
 				panic("commit new block failed: " + err.Error())
 			}
 			commitOperationMetics.Set(float64(time.Since(start).Milliseconds()))
+			fmt.Printf("After commit, StateRoot: %x, accountRoot: %x\n", common.FromHex(c.bc.Statedb.StateRoot), c.bc.Statedb.AccountTree.Root())
 		}
 	}
 }

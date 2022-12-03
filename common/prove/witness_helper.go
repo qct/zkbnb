@@ -808,6 +808,11 @@ func (w *WitnessHelper) ConstructGasWitness(block *block.Block) (cryptoGas *GasW
 		}
 		//val, _ := json.Marshal(bsmt.Item{Key: uint64(gasAccountIndex), Val: nAccountHash})
 		fmt.Printf("set Gas:%d: %x\n", gasAccountIndex, nAccountHash)
+		for i := 0; i < 6; i++ {
+			fmt.Printf("assetRoot:%d: %x\n", i, w.assetTrees.Get(int64(i)).Root())
+		}
+		//fmt.Println("printing account leaves:")
+		//w.accountTree.PrintLeaves()
 		fmt.Printf("after set gas %d, accountsRoot: %x -> %x\n", gasAccountIndex, before, w.accountTree.Root())
 		gas = &circuit.Gas{
 			GasAssetCount:                   len(types.GasAssets),

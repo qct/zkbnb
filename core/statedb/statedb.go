@@ -611,12 +611,16 @@ func (s *StateDB) IntermediateRoot(cleanDirty bool) error {
 	//}
 	//accItem, _ := json.Marshal(pendingAccountItem)
 	//fmt.Printf("pendingAccountItem: %s\n", string(accItem))
-	fmt.Printf("After AccountTreeRoot: %x\n", s.AccountTree.Root())
+	for i := 0; i < 6; i++ {
+		fmt.Printf("assetRoot:%d: %x\n", i, s.AccountAssetTrees.Get(int64(i)).Root())
+	}
+	fmt.Printf("After AccountTreeRoot: %x, nftTreeRoot: %x\n", s.AccountTree.Root(), s.NftTree.Root())
 
 	hFunc := poseidon.NewPoseidon()
 	hFunc.Write(s.AccountTree.Root())
 	hFunc.Write(s.NftTree.Root())
 	s.StateRoot = common.Bytes2Hex(hFunc.Sum(nil))
+	fmt.Printf("After stateRoot: %s\n", s.StateRoot)
 	return nil
 }
 
@@ -661,13 +665,17 @@ func (s *StateDB) updateAccountTree(accountIndex int64, assets []int64) (int64, 
 	//fmt.Printf("assetsToSet:%d: %s\n", accountIndex, string(assetItem))
 	before := s.AccountAssetTrees.Get(accountIndex).Root()
 	//for _, item := range pendingUpdateAssetItem {
+	//	before = s.AccountAssetTrees.Get(accountIndex).Root()
 	//	fmt.Println("before:")
 	//	s.AccountAssetTrees.Get(accountIndex).PrintLeaves()
 	//	err = s.AccountAssetTrees.Get(accountIndex).Set(item.Key, item.Val)
 	//	fmt.Println("after:")
 	//	s.AccountAssetTrees.Get(accountIndex).PrintLeaves()
+	//	fmt.Printf("account:%d, assetsRoot: %x -> %x\n", accountIndex, before, s.AccountAssetTrees.Get(accountIndex).Root())
 	//}
+	s.AccountAssetTrees.Get(accountIndex).PrintLeaves()
 	err = s.AccountAssetTrees.Get(accountIndex).MultiSet(pendingUpdateAssetItem)
+	s.AccountAssetTrees.Get(accountIndex).PrintLeaves()
 	fmt.Printf("account:%d, assetsRoot: %x -> %x\n", accountIndex, before, s.AccountAssetTrees.Get(accountIndex).Root())
 	if err != nil {
 		return accountIndex, nil, fmt.Errorf("update asset tree failed: %v", err)

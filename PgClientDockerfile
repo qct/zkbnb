@@ -1,0 +1,36 @@
+FROM alpine:3.15
+RUN apk --no-cache add postgresql13-client
+ENTRYPOINT [ "psql" ]
+
+# docker build -t postgresql13-client -f PgClientDockerfile .
+ docker run --rm -it --name pg-client \
+     -e PGHOST=host.docker.internal \
+     -e PGPORT=5432 \
+     -e PGUSER=postgres \
+     -e PGPASSWORD=ZkBNB@123 \
+     postgresql13-client -c "drop database zkbnb with (force)"
+
+ docker run --rm -it --name pg-client \
+     -e PGHOST=host.docker.internal \
+     -e PGPORT=5432 \
+     -e PGUSER=postgres \
+     -e PGPASSWORD=ZkBNB@123 \
+     postgresql13-client -c "create database zkbnb"
+
+# docker run --rm -it --name pg-client \
+#     -e PGDATABASE=zkbnb-test \
+#     -e PGHOST=zkbnb-pgsql-1.cz4yv2hjgf8y.ap-northeast-1.rds.amazonaws.com \
+#     -e PGPORT=5432 \
+#     -e PGUSER=cloud \
+#     -e PGPASSWORD=bnbcloud2022 \
+#     postgresql13-client -c "SELECT datname FROM pg_database;"
+
+# dump zkbnb
+docker exec zkbnb-postgres sh -c "pg_dump zkbnb -U postgres -f zkbnb_dump_20221129.sql"
+# restore local zkbnb
+docker exec zkbnb-postgres sh -c "psql -U postgres -d zkbnb < zkbnb_dump_20221129.sql"
+
+
+
+
+
